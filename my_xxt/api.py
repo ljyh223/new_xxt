@@ -237,26 +237,40 @@ class NewXxt:
         # 获取workEnc
         work_enc = BeautifulSoup(work_view.text, "lxml")
         work_enc = work_enc.find("input", id="workEnc")["value"]
-
+    
+        
         get_work_date = {
             "courseId": work_date["courseid"][0],
             "classId": work_date["clazzid"][0],
             "cpi": work_date["cpi"][0],
             "ut": "s",
+            "pageNum": 1,
             "enc": work_enc,  # workEnc
         }
-        work_list = self.sees.get(
-            url=GET_WORK_URL,
-            params=get_work_date,
-            headers={
-                "Host": "mooc1.chaoxing.com",
-                "Referer": "https://mooc2-ans.chaoxing.com/",
-                "User-Agent": self.header,
-            },
-            allow_redirects=True
-        )
-        work_li_list_soup = BeautifulSoup(work_list.text, "lxml")
-        work_li_list = work_li_list_soup.find_all("li")
+        work_li_list=[]
+        
+        
+        while True:
+            work_list = self.sees.get(
+                url=GET_WORK_URL,
+                params=get_work_date,
+                headers={
+                    "Host": "mooc1.chaoxing.com",
+                    "Referer": "https://mooc2-ans.chaoxing.com/",
+                    "User-Agent": self.header,
+                },
+                allow_redirects=True
+            )
+            work_li_list_soup = BeautifulSoup(work_list.text, "lxml")
+            work_li_list += work_li_list_soup.find_all("li")
+            page=re.findall(r'(?<=pageNum : ).*?(?=,)',work_list.text)[0]
+            page=int(page)
+            
+            if get_work_date["pageNum"]<page:
+                get_work_date['pageNum']+=1
+            else:
+                break
+            
 
         i = 1
         for work in work_li_list:
