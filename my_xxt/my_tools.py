@@ -37,15 +37,21 @@ def select_course(console: Console, courses: list) -> dict:
         select_error(console)
 
 
-def select_work(console: Console, works: list) -> dict:
+def select_work(console: Console, works: list) -> list:
     if not len(works):
         return {}
     while True:
-        index = console.input("[yellow]请输入作业答案的id：")
+        index = console.input("[yellow]请输入作业答案的id, 多个课程用英文逗号隔开, 如(1,2,3): ")
+        indexs=index.split(",")
+        result=[]
         for item in works:
-            if item["work_id"] == index:
-                return item
-        select_error(console)
+            for i in indexs:
+                if item["work_id"] == i:
+                    result.append(item)
+        if len(result)==0:
+            select_error(console)
+        return result
+
 
 
 def select_works(console: Console, works: list) -> list:
@@ -197,7 +203,7 @@ def select_menu(console: Console, xxt: NewXxt) -> None:
             works = xxt.getWorks(course["course_url"], course["course_name"])
             show_works(works, console)
 
-            work = select_work(console, works)
+            my_works = select_work(console, works)
             dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
             path = os.path.join(dir_path, "user.json")
             users = jsonFileToDate(path)
@@ -213,46 +219,51 @@ def select_menu(console: Console, xxt: NewXxt) -> None:
                 login_status = xxt.login(user["phone"], user["password"])
                 # 判断登录成功与否
                 if login_status["status"] == True:
+                    # 课程id列表
                     courses = xxt.getCourse()
-                    course = find_course(courses, work["courseId"])
-                    works = xxt.getWorks(course["course_url"], course["course_name"])
-                    work = find_work(works, work["work_id"])
-                    # 判断是否存在作业或者课程
-                    if course == {} or work == {}:
-                        console.log(
-                            f"({i})  [green]{user['name']}---该用户的作业操作失败[red]该账号不存在该课程或者作业")
-                        fail_count = fail_count + 1
-                    else:
-                        # 判断作业是什么状态
-                        if work["work_status"] == "已完成":
-                            console.log(f"({i})  [green]{user['name']}---该用户的作业操作失败[red]该账号已完成该作业")
-                            fail_count = fail_count + 1
-                            continue
-                        else:
-                            questions = xxt.get_question(work["work_url"])
-                        # 判断是否存在答案文件
-                        if not is_exist_answer_file(f"{work['id']}.json"):
+                    for my_work in my_works:
+
+                        
+                        course = find_course(courses, my_work["courseId"])
+                        works = xxt.getWorks(course["course_url"], course["course_name"])
+
+                        my_work = find_work(works, my_work["work_id"])
+                        # 判断是否存在作业或者课程
+                        if course == {} or my_work == {}:
                             console.log(
-                                f"({i})  [green]{user['name']}---该用户的作业操作失败[red]没有在答案文件中匹配到对应的答案文件")
+                                f"({i})  [green]{user['name']}---该用户的作业操作失败[red]该账号不存在该课程或者作业")
                             fail_count = fail_count + 1
-                            continue
                         else:
-                            dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-                            path = os.path.join(dir_path, "answers", f"{work['id']}.json")
-                            answer = match_answer(jsonFileToDate(path)[work["id"]], questions, xxt.randomOptions)
-                            ret = xxt.commit_work(answer, work)
-                            # 作业提交成功
-                            if ret["msg"] == 'success!':
-                                works = xxt.getWorks(course["course_url"], course["course_name"])
-                                work = find_work(works, work["work_id"])
-                                console.log(
-                                    f"({i})  [green]{user['name']}---该用户的作业操作成功[blue]最终分数为{work['score']}")
-                                success_count = success_count + 1
-                            else:
-                                console.log(
-                                    f"({i})  [green]{user['name']}---该用户的作业操作失败 {ret},你可以再次尝试一次。")
+                            # 判断作业是什么状态
+                            if my_work["work_status"] == "已完成":
+                                console.log(f"({i})  [green]{user['name']}----{my_work['work_name']}---该用户的作业操作失败[red]该账号已完成该作业")
                                 fail_count = fail_count + 1
                                 continue
+                            else:
+                                questions = xxt.get_question(my_work["work_url"])
+                            # 判断是否存在答案文件
+                            if not is_exist_answer_file(f"{my_work['id']}.json"):
+                                console.log(
+                                    f"({i})  [green]{user['name']}----{my_work['work_name']}---该用户的作业操作失败[red]没有在答案文件中匹配到对应的答案文件")
+                                fail_count = fail_count + 1
+                                continue
+                            else:
+                                dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+                                path = os.path.join(dir_path, "answers", f"{my_work['id']}.json")
+                                answer = match_answer(jsonFileToDate(path)[my_work["id"]], questions, xxt.randomOptions)
+                                ret = xxt.commit_work(answer, my_work)
+                                # 作业提交成功
+                                if ret["msg"] == 'success!':
+                                    works = xxt.getWorks(course["course_url"], course["course_name"])
+                                    my_work = find_work(works, my_work["work_id"])
+                                    console.log(
+                                        f"({i})  [green]{user['name']}----{my_work['work_name']}---该用户的作业操作成功[blue]最终分数为{my_work['score']}")
+                                    success_count = success_count + 1
+                                else:
+                                    console.log(
+                                        f"({i})  [green]{user['name']}----{my_work['work_name']}---该用户的作业操作失败 {ret},你可以再次尝试一次。")
+                                    fail_count = fail_count + 1
+                                    continue
                 else:
                     console.log(f"({i})  [green]{user['name']}---该用户的作业操作失败:[red]账号或者密码错误[/red][/green]")
                     fail_count = fail_count + 1
