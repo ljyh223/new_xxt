@@ -13,6 +13,12 @@
 ![contributors](https://badgen.net/github/contributors/aglorice/new_xxt)
 ![prs](https://badgen.net/github/prs/aglorice/new_xxt)
 
+## 关于
+
+原仓库已经归档, 但是我猜还是有很多人在用，日常修一修bug.
+
+- 修复了爬取答案时，有多页作业的时候只会读取第一页的作业的bug。
+
 ## 1️⃣实现方法
 - 从已完成该课程的作业的账号中获取作业答案
 - 登录到自己的账号获取题目顺序，与之前的答案进行比较获取到正确的选项或者填空
