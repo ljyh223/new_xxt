@@ -237,8 +237,7 @@ class NewXxt:
         # 获取workEnc
         work_enc = BeautifulSoup(work_view.text, "lxml")
         work_enc = work_enc.find("input", id="workEnc")["value"]
-    
-        
+
         get_work_date = {
             "courseId": work_date["courseid"][0],
             "classId": work_date["clazzid"][0],
@@ -247,9 +246,8 @@ class NewXxt:
             "pageNum": 1,
             "enc": work_enc,  # workEnc
         }
-        work_li_list=[]
-        
-        
+        work_li_list = []
+
         while True:
             work_list = self.sees.get(
                 url=GET_WORK_URL,
@@ -263,14 +261,14 @@ class NewXxt:
             )
             work_li_list_soup = BeautifulSoup(work_list.text, "lxml")
             work_li_list += work_li_list_soup.find_all("li")
-            page=re.findall(r'(?<=pageNum : ).*?(?=,)',work_list.text)[0]
-            page=int(page)
-            
-            if get_work_date["pageNum"]<page:
-                get_work_date['pageNum']+=1
+            page = re.findall(r'(?<=pageNum : ).*?(?=,)', work_list.text)
+            if len(page) == 0: break
+            page = int(page[0])
+
+            if get_work_date["pageNum"] < page:
+                get_work_date['pageNum'] += 1
             else:
                 break
-            
 
         i = 1
         for work in work_li_list:
@@ -386,7 +384,7 @@ class NewXxt:
                 "User-Agent": self.header,
             },
         )
-        
+
         work_view_soup = BeautifulSoup(work_answer_view.text, "lxml")
         work_view = work_view_soup.find_all("div", attrs={"class": "marBom60 questionLi singleQuesId"})
         _answer_type = AnswerType()
@@ -494,7 +492,7 @@ class NewXxt:
         :return:
         """
         work_question = []
-        
+
         work_question_view = self.sees.get(
             url=work_url,
             headers={
@@ -502,7 +500,7 @@ class NewXxt:
             },
             params=params,
         )
-    
+
         work_view_soup = BeautifulSoup(work_question_view.text, "lxml")
         randomOptions_soup = work_view_soup.find_all("input", attrs={"id": "randomOptions"})
 
@@ -511,7 +509,6 @@ class NewXxt:
         self.randomOptions = randomOptions
 
         work_view = work_view_soup.find_all("div", attrs={"class": "padBom50 questionLi fontLabel singleQuesId"})
-
 
         _question_type = QuestionType()
         for item in work_view:

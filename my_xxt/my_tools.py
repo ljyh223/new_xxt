@@ -4,6 +4,7 @@
 # @Email  :401208941@qq.com
 # @PROJECT_NAME :xxt_cli
 # @File :  my_tools.py
+import concurrent.futures
 import difflib
 import json
 import os
@@ -14,6 +15,8 @@ from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+
+from concurrent.futures import ThreadPoolExecutor
 
 from my_xxt.findAnswer import match_answer
 from my_xxt.api import NewXxt
@@ -42,16 +45,15 @@ def select_work(console: Console, works: list) -> list:
         return {}
     while True:
         index = console.input("[yellow]请输入作业答案的id, 多个课程用英文逗号隔开, 如(1,2,3): ")
-        indexs=index.split(",")
-        result=[]
+        indexs = index.split(",")
+        result = []
         for item in works:
             for i in indexs:
                 if item["work_id"] == i:
                     result.append(item)
-        if len(result)==0:
+        if len(result) == 0:
             select_error(console)
         return result
-
 
 
 def select_works(console: Console, works: list) -> list:
@@ -211,68 +213,70 @@ def select_menu(console: Console, xxt: NewXxt) -> None:
 
             users_select = select_users(users, console)
             i = 0
-            success_count = 0
             fail_count = 0
-            for user in users_select:
-                i = i + 1
-                xxt = NewXxt()
-                login_status = xxt.login(user["phone"], user["password"])
-                # 判断登录成功与否
-                if login_status["status"] == True:
-                    # 课程id列表
-                    courses = xxt.getCourse()
-                    for my_work in my_works:
-
-                        
-                        course = find_course(courses, my_work["courseId"])
-                        works = xxt.getWorks(course["course_url"], course["course_name"])
-
-                        my_work = find_work(works, my_work["work_id"])
-                        # 判断是否存在作业或者课程
-                        if course == {} or my_work == {}:
-                            console.log(
-                                f"({i})  [green]{user['name']}---该用户的作业操作失败[red]该账号不存在该课程或者作业")
-                            fail_count = fail_count + 1
-                        else:
-                            # 判断作业是什么状态
-                            if my_work["work_status"] == "已完成":
-                                console.log(f"({i})  [green]{user['name']}----{my_work['work_name']}---该用户的作业操作失败[red]该账号已完成该作业")
-                                fail_count = fail_count + 1
-                                continue
-                            else:
-                                questions = xxt.get_question(my_work["work_url"])
-                            # 判断是否存在答案文件
-                            if not is_exist_answer_file(f"{my_work['id']}.json"):
+            futures = []
+            with ThreadPoolExecutor(max_workers=5) as t:
+                for user in users_select:
+                    i = i + 1
+                    xxt = NewXxt()
+                    login_status = xxt.login(user["phone"], user["password"])
+                    # 判断登录成功与否
+                    if login_status["status"]:
+                        # 课程id列表
+                        courses = xxt.getCourse()
+                        for my_work in my_works:
+                            course = find_course(courses, my_work["courseId"])
+                            works = xxt.getWorks(course["course_url"], course["course_name"])
+                            my_work = find_work(works, my_work["work_id"])
+                            # 判断是否存在作业或者课程
+                            if course == {} or my_work == {}:
                                 console.log(
-                                    f"({i})  [green]{user['name']}----{my_work['work_name']}---该用户的作业操作失败[red]没有在答案文件中匹配到对应的答案文件")
+                                    f"({i})  [green]{user['name']}---该用户的作业操作失败[red]该账号不存在该课程或者作业")
                                 fail_count = fail_count + 1
-                                continue
+
                             else:
-                                dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-                                path = os.path.join(dir_path, "answers", f"{my_work['id']}.json")
-                                answer = match_answer(jsonFileToDate(path)[my_work["id"]], questions, xxt.randomOptions)
-                                ret = xxt.commit_work(answer, my_work)
-                                # 作业提交成功
-                                if ret["msg"] == 'success!':
-                                    works = xxt.getWorks(course["course_url"], course["course_name"])
-                                    my_work = find_work(works, my_work["work_id"])
-                                    console.log(
-                                        f"({i})  [green]{user['name']}----{my_work['work_name']}---该用户的作业操作成功[blue]最终分数为{my_work['score']}")
-                                    success_count = success_count + 1
-                                else:
-                                    console.log(
-                                        f"({i})  [green]{user['name']}----{my_work['work_name']}---该用户的作业操作失败 {ret},你可以再次尝试一次。")
-                                    fail_count = fail_count + 1
-                                    continue
-                else:
-                    console.log(f"({i})  [green]{user['name']}---该用户的作业操作失败:[red]账号或者密码错误[/red][/green]")
-                    fail_count = fail_count + 1
-            console.log(f"[yellow]一共成功{success_count},失败数为{fail_count}[/yellow]")
+                                t.submit(do_work, console, user, my_work, course, xxt, i)
+                    else:
+                        console.log(
+                            f"({i})  [green]{user['name']}---该用户的作业操作失败:[red]账号或者密码错误[/red][/green]")
+                        fail_count = fail_count + 1
+
             continue
         # 退出登录
         elif index == "9":
             return
         select_error(console)
+
+
+def do_work(console: Console, user: dict, my_work: dict, course: dict, xxt: NewXxt, i: int):
+    # 判断作业是什么状态
+    if my_work["work_status"] == "已完成":
+        console.log(
+            f"({i})  [green]{user['name']}----{my_work['work_name']}---该用户的作业操作失败[red]该账号已完成该作业")
+        return 0
+    else:
+        questions = xxt.get_question(my_work["work_url"])
+    # 判断是否存在答案文件
+    if not is_exist_answer_file(f"{my_work['id']}.json"):
+        console.log(
+            f"({i})  [green]{user['name']}----{my_work['work_name']}---该用户的作业操作失败[red]没有在答案文件中匹配到对应的答案文件")
+        return 0
+    else:
+        dir_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+        path = os.path.join(dir_path, "answers", f"{my_work['id']}.json")
+        answer = match_answer(jsonFileToDate(path)[my_work["id"]], questions, xxt.randomOptions)
+        ret = xxt.commit_work(answer, my_work)
+        # 作业提交成功
+        if ret["msg"] == 'success!':
+            works = xxt.getWorks(course["course_url"], course["course_name"])
+            my_work = find_work(works, my_work["work_id"])
+            console.log(
+                f"({i})  [green]{user['name']}----{my_work['work_name']}---该用户的作业操作成功[blue]最终分数为{my_work['score']}")
+            return 1
+        else:
+            console.log(
+                f"({i})  [green]{user['name']}----{my_work['work_name']}---该用户的作业操作失败 {ret},你可以再次尝试一次。")
+            return 0
 
 
 def find_course(courses: list, course_id: str) -> dict:
@@ -291,7 +295,6 @@ def find_work(works: list, work_id: str) -> dict:
 
 
 def show_start(console: Console) -> None:
-
     console.print(Panel(
         title="[white]欢迎使用该做题脚本",
         renderable=
@@ -301,8 +304,9 @@ def show_start(console: Console) -> None:
  ██╔██╗ ██║█████╗  ██║ █╗ ██║         ╚███╔╝  ╚███╔╝    ██║\n\
   ██║╚██╗██║██╔══╝  ██║███╗██║         ██╔██╗  ██╔██╗    ██║\n\
   ██║ ╚████║███████╗╚███╔███╔╝███████╗██╔╝ ██╗██╔╝ ██╗   ██║\n\
-  ╚═╝  ╚═══╝╚══════╝ ╚══╝╚══╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝  ", justify="center",style="bold white"),
-            Text("注意：该脚本仅供学习参考,详细信息请参考https://github.com/aglorice/new_xxt", justify="center", style="bold red"),
+  ╚═╝  ╚═══╝╚══════╝ ╚══╝╚══╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝  ", justify="center", style="bold white"),
+            Text("注意：该脚本仅供学习参考,详细信息请参考https://github.com/aglorice/new_xxt", justify="center",
+                 style="bold red"),
             Text(f"当前版本为 {__VERSION__}", justify="center", style="bold red"),
         ),
         style="bold green",
